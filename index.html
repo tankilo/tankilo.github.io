@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.53" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Tankilo&#39;s Blog | &#39;The expert in anything was once a beginner&#39;</title>
+    <meta property="og:title" content="Tankilo&#39;s Blog | &#39;The expert in anything was once a beginner&#39;">
+    <meta property="og:type" content="website">
+    <meta name="Keywords" content="java,分布式,docker">
+    <meta name="description" content="">
+    <meta property="og:url" content="https://tankilo.github.io/">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="alternate" type="application/rss+xml+xml" href="https://tankilo.github.io/index.xml" title="Tankilo's Blog" />
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <h1>
+                        <a id="logo" href="https://tankilo.github.io">
+                            Tankilo&#39;s Blog
+                        </a>
+                    </h1>
+                
+                <p class="description">&#39;The expert in anything was once a beginner&#39;</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="current" href="https://tankilo.github.io">首页</a>
+                    
+                    <a  href="https://tankilo.github.io/archives/" title="归档">归档</a>
+                    
+                    <a  href="https://tankilo.github.io/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    
+                        <article class="post">
+                            <header>
+                                <h1 class="post-title">
+                                    <a href="https://tankilo.github.io/posts/maven-assembly-plugin-bug/" title="maven-assembly-plugin 打包包含多余依赖问题一则" >maven-assembly-plugin 打包包含多余依赖问题一则</a>
+                                </h1>
+                            </header>
+                            <date class="post-meta meta-date">
+                                2019年1月19日
+                            </date>
+                            
+                            <div class="post-content">
+                                有同事反馈自己maven-assembly-plugin打的包里面多了很多mvn dependency:tree中没有的jar。
+我当时只是试着把他的maven-assembly-plugin更新到了最新版本3.1.1，没想到问题就消除了。
+之后我继续把他的依赖和打包插件单独拎到一个新的空白maven项目里，最终发现问题所在。
+原因
+当你在pom对某个坐标使用exclusion *，排除全部传递依赖的时候，老版本的maven-assembly-plugin插件依然会包含你已经排除的依赖。
+老版本插件打包 错误的包含了pom里已经排除的传递依赖，结果如下
+新版本已经修复了这个问题，结果如下……
+                            </div>
+                            <p class="readmore"><a href="https://tankilo.github.io/posts/maven-assembly-plugin-bug/">阅读全文</a></p>
+                        </article>
+                    
+
+                    
+
+
+
+
+                </div>
+            </div>
+
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://tankilo.github.io">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://tankilo.github.io/posts/maven-assembly-plugin-bug/" title="maven-assembly-plugin 打包包含多余依赖问题一则">maven-assembly-plugin 打包包含多余依赖问题一则</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+</ul>
+    </section>
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://tankilo.github.io/tags/maven/">maven</a>
+    
+</div>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">其它</h3>
+        <ul class="widget-list">
+            <li><a href="https://tankilo.github.io/index.xml">文章 RSS</a></li>
+        </ul>
+    </section>
+</div>
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2018 <a href="https://tankilo.github.io">Tankilo&#39;s Blog By Tankilo</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/rujews/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+
+
+
+
+</body>
+</html>

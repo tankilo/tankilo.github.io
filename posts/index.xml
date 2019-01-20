@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Posts on Tankilo&#39;s Blog</title>
+    <link>https://tankilo.github.io/posts/</link>
+    <description>Recent content in Posts on Tankilo&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-CN</language>
+    <lastBuildDate>Sat, 19 Jan 2019 00:00:00 +0000</lastBuildDate>
+    
+	<atom:link href="https://tankilo.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>maven-assembly-plugin 打包包含多余依赖问题一则</title>
+      <link>https://tankilo.github.io/posts/maven-assembly-plugin-bug/</link>
+      <pubDate>Sat, 19 Jan 2019 00:00:00 +0000</pubDate>
+      
+      <guid>https://tankilo.github.io/posts/maven-assembly-plugin-bug/</guid>
+      <description>有同事反馈自己maven-assembly-plugin打的包里面多了很多mvn dependency:tree中没有的jar。
+我当时只是试着把他的maven-assembly-plugin更新到了最新版本3.1.1，没想到问题就消除了。
+之后我继续把他的依赖和打包插件单独拎到一个新的空白maven项目里，最终发现问题所在。
+原因
+当你在pom对某个坐标使用exclusion *，排除全部传递依赖的时候，老版本的maven-assembly-plugin插件依然会包含你已经排除的依赖。
+老版本插件打包 错误的包含了pom里已经排除的传递依赖，结果如下
+新版本已经修复了这个问题，结果如下</description>
+    </item>
+    
+  </channel>
+</rss>
