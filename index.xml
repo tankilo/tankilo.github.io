@@ -6,10 +6,38 @@
     <description>Recent content on Tankilo&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-CN</language>
-    <lastBuildDate>Sat, 19 Jan 2019 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 09 Mar 2019 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://tankilo.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>DBLE元数据代码原理解析</title>
+      <link>https://tankilo.github.io/posts/dble-metadata/</link>
+      <pubDate>Sat, 09 Mar 2019 00:00:00 +0000</pubDate>
+      
+      <guid>https://tankilo.github.io/posts/dble-metadata/</guid>
+      <description>DBLE 官方文档 2.10 meta数据管理 背景介绍 meta数据包括表信息和视图信息，本文只关心表信息。
+维护meta数据的意义 之前创建表的时候，只有在表名和schema.xml里配置的逻辑表冲突的时候，sql才能不执行提前返回错误。在schema默认datanode创建表这种情况时，只能走到后端mysql才发现错误。现在内存中有了完整的meta，表名重复都可以提前拦截。
+DBLE复杂sql查询的时候，需要metadata。
+DBLE的方案 每个dble节点内存中都维护metadata metadata是每个节点从后端mysql查询解析出来的 分库分表多个表的时候，会做分片一致性校验
+有两个层级的锁来使操作相同表的DDL串行执行
+1. 单节点时本地锁
+内存中本地锁，单进程内每个DDL sql串行去校验锁，锁本身是按照表的粒度组织的
+2. 多节点时zk节点互斥
+在本地锁上新增一层 zk中的互斥锁，执行DDL前选获取本地锁，再检查zk中的节点，保证操作相同表的DDL在多个dble节点之间串行执行。DDL执行成功后还要通知其他节点更新各自维护的metadata。
+详细流程 以zk多节点为例，按照程序执行的顺序来介绍。
+上面的图来自于官方文档 2.8.4 状态同步 A.DDL
+初始化 代码入口 com.actiontech.dble.meta.ProxyMetaManager#metaZKinit
+1. 阻止其他节点再执行DDL 一直尝试去创建临时节点KVPathUtil.getSyncMetaLockPath()，直到成功,zk路径值例如/dble/cluster-1/lock/syncMeta.lock。这个节点如果添加成功，会组织其他dble节点开始执行DDL。
+2. 等待执行中的DDL完成 等待KVPathUtil.getDDLPath()，zk路径例如/dble/cluster-1/ddl下没有子节点，这步是等待所有正在执行中的DDL 执行完成。
+3. 从后端mysql查询表信息，包括配置的逻辑表和默认datanode的单表 接下来调用ProxyMetaManager#initMeta，单节点的时候是直接调用这个方法，不走上面的逻辑。
+ProxyMetaManager#initMeta com.actiontech.dble.meta.table.SchemaMetaHandler里有两套逻辑 默认是走新的重构过的逻辑。
+老的逻辑是每个表一个sql去查，如果表多了，因为异步执行，开始就把连接池耗尽了。
+新的逻辑是每个datanode上表的信息汇总一下，每个datanode上的表信息批量去查(多个show create table拼接)，减少连接消耗数。
+最终加载的表信息存储在com.actiontech.dble.meta.ProxyMetaManager#catalogs成员中
+信号量释放流程 总任务入口SchemaMetaHandler 每个逻辑库一个任务 MultiTablesMetaHandler，一共schemaNumber个 默认路由上非逻辑表的物理表对应一个任务 任务数量singleTableCnt总是1 任务执行完调用MultiTablesMetaHandler#countDownSingleTable singleTableCnt=0的时候，调用MultiTablesMetaHandler#countDown 按datanode分库 分组的物理表 shardTableCnt是datanode分库数量 每个datanode分库一个任务 执行完将shardTableCnt减一 最后一个人shardTableCnt=0的时候，去调MultiTablesMetaHandler#countDown 上面两个子任务里面 最后的那个在调MultiTablesMetaHandler#countDown的时候 当shardTableCnt singleTableCnt都为0的话 会去调用SchemaMetaHandler#countDown 这个逻辑库任务就完成了 最后一个逻辑库的子任务 调用SchemaMetaHandler#countDown 发现schemaNumber=0的时候，会调用 allSchemaDone.</description>
+    </item>
     
     <item>
       <title>maven-assembly-plugin 打包包含多余依赖问题一则</title>

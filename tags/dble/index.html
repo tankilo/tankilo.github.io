@@ -7,18 +7,22 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>Tankilo&#39;s Blog | &#39;The expert in anything was once a beginner&#39;</title>
-    <meta property="og:title" content="Tankilo&#39;s Blog | &#39;The expert in anything was once a beginner&#39;">
-    <meta property="og:type" content="website">
+    <title>Dble | Tankilo&#39;s Blog</title>
+    <meta property="og:title" content="Dble - Tankilo&#39;s Blog">
+    <meta property="og:type" content="article">
+        
+        
     <meta name="Keywords" content="java,分布式,docker">
-    <meta name="description" content="">
-    <meta property="og:url" content="https://tankilo.github.io/">
+    <meta name="description" content="Dble">
+        
+    <meta name="author" content="Tankilo">
+    <meta property="og:url" content="https://tankilo.github.io/tags/dble/">
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 
     <link rel="stylesheet" href="/css/normalize.css">
     
     <link rel="stylesheet" href="/css/style.css">
-    <link rel="alternate" type="application/rss+xml+xml" href="https://tankilo.github.io/index.xml" title="Tankilo's Blog" />
+    <link rel="alternate" type="application/rss+xml+xml" href="https://tankilo.github.io/tags/dble/index.xml" title="Tankilo's Blog" />
     <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
 
     
@@ -35,17 +39,15 @@
         <div class="col-group">
             <div class="site-name ">
                 
-                    <h1>
-                        <a id="logo" href="https://tankilo.github.io">
-                            Tankilo&#39;s Blog
-                        </a>
-                    </h1>
+                    <a id="logo" href="https://tankilo.github.io">
+                        Tankilo&#39;s Blog
+                    </a>
                 
                 <p class="description">&#39;The expert in anything was once a beginner&#39;</p>
             </div>
             <div>
                 <nav id="nav-menu" class="clearfix">
-                    <a class="current" href="https://tankilo.github.io">首页</a>
+                    <a class="" href="https://tankilo.github.io">首页</a>
                     
                     <a  href="https://tankilo.github.io/archives/" title="归档">归档</a>
                     
@@ -65,10 +67,18 @@
             <div class="col-8" id="main">
                 <div class="res-cons">
                     
+                    <h3 class="archive-title">
+                        包含标签
+                        <span class="keyword">dble</span>
+                        的文章
+                    </h3>
+                    
+
+                    
                         <article class="post">
                             <header>
                                 <h1 class="post-title">
-                                    <a href="https://tankilo.github.io/posts/dble-metadata/" title="DBLE元数据代码原理解析" >DBLE元数据代码原理解析</a>
+                                    <a href="https://tankilo.github.io/posts/dble-metadata/">DBLE元数据代码原理解析</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
@@ -96,30 +106,8 @@ ProxyMetaManager#initMeta com.actiontech.dble.meta.table.SchemaMetaHandler里有
 新的逻辑是每个datanode上表的信息汇总一下，每个datanode上的表信息批量去查(多个show create table拼接)，减少连接消耗数。
 最终加载的表信息存储在com.actiontech.dble.meta.ProxyMetaManager#catalogs成员中
 信号量释放流程 总任务入口SchemaMetaHandler 每个逻辑库一个任务 MultiTablesMetaHandler，一共schemaNumber个 默认路由上非逻辑表的物理表对应一个任务 任务数量singleTableCnt总是1 任务执行完调用MultiTablesMetaHandler#countDownSingleTable singleTableCnt=0的时候，调用MultiTablesMetaHandler#countDown 按datanode分库 分组的物理表 shardTableCnt是datanode分库数量 每个datanode分库一个任务 执行完将shardTableCnt减一 最后一个人shardTableCnt=0的时候，去调MultiTablesMetaHandler#countDown 上面两个子任务里面 最后的那个在调MultiTablesMetaHandler#countDown的时候 当shardTableCnt singleTableCnt都为0的话 会去调用SchemaMetaHandler#countDown 这个逻辑库任务就完成了 最后一个逻辑库的子任务 调用SchemaMetaHandler#countDown 发现schemaNumber=0的时候，会调用 allSchemaDone.……
+                                <p class="readmore"><a href="https://tankilo.github.io/posts/dble-metadata/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://tankilo.github.io/posts/dble-metadata/">阅读全文</a></p>
-                        </article>
-                    
-                        <article class="post">
-                            <header>
-                                <h1 class="post-title">
-                                    <a href="https://tankilo.github.io/posts/maven-assembly-plugin-bug/" title="maven-assembly-plugin 打包包含多余依赖问题一则" >maven-assembly-plugin 打包包含多余依赖问题一则</a>
-                                </h1>
-                            </header>
-                            <date class="post-meta meta-date">
-                                2019年1月19日
-                            </date>
-                            
-                            <div class="post-content">
-                                有同事反馈自己maven-assembly-plugin打的包里面多了很多mvn dependency:tree中没有的jar。
-我当时只是试着把他的maven-assembly-plugin更新到了最新版本3.1.1，没想到问题就消除了。
-之后我继续把他的依赖和打包插件单独拎到一个新的空白maven项目里，最终发现问题所在。
-原因
-当你在pom对某个坐标使用exclusion *，排除全部传递依赖的时候，老版本的maven-assembly-plugin插件依然会包含你已经排除的依赖。
-老版本插件打包 错误的包含了pom里已经排除的传递依赖，结果如下
-新版本已经修复了这个问题，结果如下……
-                            </div>
-                            <p class="readmore"><a href="https://tankilo.github.io/posts/maven-assembly-plugin-bug/">阅读全文</a></p>
                         </article>
                     
 

@@ -6,10 +6,19 @@
     <description>Recent content in Tags on Tankilo&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-CN</language>
-    <lastBuildDate>Sat, 19 Jan 2019 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 09 Mar 2019 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://tankilo.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Dble</title>
+      <link>https://tankilo.github.io/tags/dble/</link>
+      <pubDate>Sat, 09 Mar 2019 00:00:00 +0000</pubDate>
+      
+      <guid>https://tankilo.github.io/tags/dble/</guid>
+      <description></description>
+    </item>
     
     <item>
       <title>Maven</title>

@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.53" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>DBLE元数据代码原理解析 | Tankilo&#39;s Blog</title>
+    <meta property="og:title" content="DBLE元数据代码原理解析 - Tankilo&#39;s Blog">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2019-03-09T00:00:00&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2019-03-09T00:00:00&#43;08:00">
+        
+    <meta name="Keywords" content="java,分布式,docker">
+    <meta name="description" content="DBLE元数据代码原理解析">
+        
+    <meta name="author" content="Tankilo">
+    <meta property="og:url" content="https://tankilo.github.io/posts/dble-metadata/">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://tankilo.github.io">
+                        Tankilo&#39;s Blog
+                    </a>
+                
+                <p class="description">&#39;The expert in anything was once a beginner&#39;</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://tankilo.github.io">首页</a>
+                    
+                    <a  href="https://tankilo.github.io/archives/" title="归档">归档</a>
+                    
+                    <a  href="https://tankilo.github.io/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">DBLE元数据代码原理解析</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2019年3月9日
+                        </date>
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h1 id="dble-官方文档">DBLE 官方文档</h1>
+
+<p><a href="https://actiontech.github.io/dble-docs-cn/2.Function/2.10_table_meta.html">2.10 meta数据管理</a>
+<img src="./imgs/5c8adcec-5905-4d54-becc-b35907384670.png" alt="" /></p>
+
+<h1 id="背景介绍">背景介绍</h1>
+
+<p>meta数据包括表信息和视图信息，本文只关心表信息。</p>
+
+<h2 id="维护meta数据的意义">维护meta数据的意义</h2>
+
+<p>之前创建表的时候，只有在表名和schema.xml里配置的逻辑表冲突的时候，sql才能不执行提前返回错误。在schema默认datanode创建表这种情况时，只能走到后端mysql才发现错误。现在内存中有了完整的meta，表名重复都可以提前拦截。</p>
+
+<p>DBLE复杂sql查询的时候，需要metadata。</p>
+
+<h2 id="dble的方案">DBLE的方案</h2>
+
+<p>每个dble节点内存中都维护metadata
+metadata是每个节点从后端mysql查询解析出来的
+分库分表多个表的时候，会做分片一致性校验</p>
+
+<p>有<strong>两个层级的锁</strong>来使操作相同表的DDL串行执行<br />
+1. 单节点时本地锁<br />
+内存中本地锁，单进程内每个DDL sql串行去校验锁，锁本身是按照表的粒度组织的<br />
+2. 多节点时zk节点互斥<br />
+在本地锁上新增一层 zk中的互斥锁，执行DDL前选获取本地锁，再检查zk中的节点，保证操作相同表的DDL在多个dble节点之间串行执行。DDL执行成功后还要通知其他节点更新各自维护的metadata。</p>
+
+<h2 id="详细流程">详细流程</h2>
+
+<p>以zk多节点为例，按照程序执行的顺序来介绍。</p>
+
+<p><img src="./imgs/48a8a167-1046-4ef1-b525-8c12012158a1.png" alt="" />
+上面的图来自于官方文档 <a href="https://actiontech.github.io/dble-docs-cn/2.Function/2.08_cluster.html" title="2.8.4 状态同步 A.DDL">2.8.4 状态同步 A.DDL</a></p>
+
+<h3 id="初始化">初始化</h3>
+
+<p><strong>代码入口</strong> com.actiontech.dble.meta.ProxyMetaManager#metaZKinit</p>
+
+<h4 id="1-阻止其他节点再执行ddl">1. 阻止其他节点再执行DDL</h4>
+
+<p>一直尝试去创建临时节点KVPathUtil.getSyncMetaLockPath()，直到成功,zk路径值例如<code>/dble/cluster-1/lock/syncMeta.lock</code>。这个节点如果添加成功，会组织其他dble节点开始执行DDL。</p>
+
+<h4 id="2-等待执行中的ddl完成">2. 等待执行中的DDL完成</h4>
+
+<p>等待KVPathUtil.getDDLPath()，zk路径例如<code>/dble/cluster-1/ddl</code>下没有子节点，这步是等待所有正在执行中的DDL 执行完成。</p>
+
+<h4 id="3-从后端mysql查询表信息-包括配置的逻辑表和默认datanode的单表">3. 从后端mysql查询表信息，包括配置的逻辑表和默认datanode的单表</h4>
+
+<p>接下来调用ProxyMetaManager#initMeta，单节点的时候是直接调用这个方法，不走上面的逻辑。</p>
+
+<h5 id="proxymetamanager-initmeta">ProxyMetaManager#initMeta</h5>
+
+<p>com.actiontech.dble.meta.table.SchemaMetaHandler里有两套逻辑
+默认是走新的重构过的逻辑。</p>
+
+<p>老的逻辑是每个表一个sql去查，如果表多了，因为异步执行，开始就把连接池耗尽了。</p>
+
+<p>新的逻辑是每个datanode上表的信息汇总一下，每个datanode上的表信息批量去查(多个show create table拼接)，减少连接消耗数。</p>
+
+<p>最终加载的表信息存储在com.actiontech.dble.meta.ProxyMetaManager#catalogs成员中</p>
+
+<h4 id="信号量释放流程">信号量释放流程</h4>
+
+<pre><code>总任务入口SchemaMetaHandler
+每个逻辑库一个任务 MultiTablesMetaHandler，一共schemaNumber个
+         默认路由上非逻辑表的物理表对应一个任务 任务数量singleTableCnt总是1
+                  任务执行完调用MultiTablesMetaHandler#countDownSingleTable
+                  singleTableCnt=0的时候，调用MultiTablesMetaHandler#countDown
+         按datanode分库 分组的物理表  shardTableCnt是datanode分库数量
+                  每个datanode分库一个任务  执行完将shardTableCnt减一
+                  最后一个人shardTableCnt=0的时候，去调MultiTablesMetaHandler#countDown
+         上面两个子任务里面 最后的那个在调MultiTablesMetaHandler#countDown的时候
+                  当shardTableCnt singleTableCnt都为0的话
+                  会去调用SchemaMetaHandler#countDown
+                  这个逻辑库任务就完成了
+最后一个逻辑库的子任务 调用SchemaMetaHandler#countDown 发现schemaNumber=0的时候，会调用 allSchemaDone.signal()
+这样SchemaMetaHandler#execute allSchemaDone.await() 阻塞解除 全体任务完成
+</code></pre>
+
+<h4 id="4-继续准备一些zk上的信息">4. 继续准备一些zk上的信息</h4>
+
+<ul>
+<li><p>创建online临时节点
+在KVPathUtil#getOnlinePath路径下创建临时节点，, znode路径是/dble/{clusterId}/online/{myid}
+ZktoXmlMain#loadZktoFile里面注册的OfflineStatusListener，会对这个路径进行监听，主要是节点挂掉以后，其他节点会检查宕机节点是否有未完成的DDL，进行一些释放和告警操作。</p></li>
+
+<li><p>对KVPathUtil.getDDLPath()注册DDLChildListener
+DDL当前执行节点在这个类里不做任何操作，其他节点通过这个类来接受远程DDL节点的指令，处理本地锁、更新自己维护的metadata,以及给DDL执行节点 回复操作的结果。</p></li>
+</ul>
+
+<h4 id="5-删除kvpathutil-getsyncmetalockpath-其他节点可以继续执行ddl">5. 删除KVPathUtil.getSyncMetaLockPath()，其他节点可以继续执行DDL</h4>
+
+<h3 id="ddl节点-sql解析过程中校验表名是否已经存在">DDL节点 SQL解析过程中校验表名是否已经存在</h3>
+
+<p>com.actiontech.dble.route.parser.druid.impl.ddl.DruidCreateTableParser#visitorParse</p>
+
+<pre><code>String schemaName = schema == null ? null : schema.getName();
+SchemaInfo schemaInfo = SchemaUtil.getSchemaInfo(sc.getUser(), schemaName, createStmt.getTableSource());
+StructureMeta.TableMeta tableMeta = DbleServer.getInstance().getTmManager().getSyncTableMeta(schemaInfo.getSchema(), schemaInfo.getTable());
+if (tableMeta != null &amp;&amp; !createStmt.isIfNotExiists()) {
+    String msg = &quot;Table '&quot; + schemaInfo.getSchema() + &quot;.&quot; + schemaInfo.getTable() + &quot;' or table meta already exists&quot;;
+    throw new SQLException(msg, &quot;42S01&quot;, ErrorCode.ER_TABLE_EXISTS_ERROR);
+}
+</code></pre>
+
+<h3 id="ddl节点-执行前校验锁">DDL节点 执行前校验锁</h3>
+
+<p>com.actiontech.dble.server.ServerConnection#routeEndExecuteSQL</p>
+
+<p>com.actiontech.dble.server.ServerConnection#addTableMetaLock
+先调用<code>ProxyMetaManager#addMetaLock</code>尝试获取本地锁，锁粒度是table。
+如果获取失败，表示本进程内有其他DDL在更新相同的表，那么直接报错结束。<br />
+如果获取成功，本进程内没有冲突，继续检查，如果zk上  KVPathUtil.getSyncMetaLockPath()（<code>/dble/cluster-1/lock/syncMeta.lock</code>）路径存在 或者 <code>/dble/{clusterId}/ddl/{目标库}.{目标表}</code>路径存在，都直接提前报错返回。</p>
+
+<p>注意，如果没dble节点初始化，但是两个不同的节点DDL都来这里检查，是可以通过校验的，但是后面创建zk节点的时候，其中一个还是会失败，所以不会有问题。</p>
+
+<p>通过校验以后，调用<code>ProxyMetaManager#notifyClusterDDL</code>,在zk上创建<code>/dble/{clusterId}/ddl/{目标库}.{目标表}</code>路径，内容是<code>com.actiontech.dble.config.loader.zkprocess.zookeeper.process.DDLInfo#toString</code>,其中<code>DDLInfo#status</code>是<code>DDLStatus#INIT</code></p>
+
+<h3 id="其他节点-ddlchildlistener监听到zk上-dble-clusterid-ddl-目标库-目标表-节点的创建">其他节点 DDLChildListener监听到zk上<code>/dble/{clusterId}/ddl/{目标库}.{目标表}</code>节点的创建</h3>
+
+<p>com.actiontech.dble.meta.DDLChildListener#lockTableByNewNode
+会调用<code>ProxyMetaManager#addMetaLock</code>去加本地锁。</p>
+
+<p>这里加本地锁可能会出现失败，因为在瞬间可能有操作相同表的DDL在执行前校验锁，并且已经获取到本地锁了，正准备校验dble初始化锁和ddl path锁。这时候DDLChildListener#lockTableByNewNode加本地锁就会失败。不过从DDL执行上来说，ddl path的锁还是可以保证其他ddl无法执行。
+<img src="./imgs/6c1eeaa1-57e9-4ea9-a7ab-71bd8db5dc56.png" alt="" />
+<img src="./imgs/27bda39728c9a204839a8ef4cb6b6d79.png" alt="" />
+<img src="./imgs/71a727ac5210fb294462c1cdf97ca0a1.png" alt="" /></p>
+
+<h3 id="ddl节点-ddl执行成功或者失败时-调用nonblockingsession-handlespecial">DDL节点 DDL执行成功或者失败时 调用NonBlockingSession#handleSpecial</h3>
+
+<p>这里是很核心的逻辑，DDL执行失败，DDL节点需要通知其他节点释放锁，如果DDL执行成功后，DDL节点还需要更新自己维护的metadata信息和通知其他节点更新内存信息。</p>
+
+<p>com.actiontech.dble.meta.ProxyMetaManager#updateMetaData
+首先这里会区分下DDL的类型，存储在com.actiontech.dble.route.RouteResultset#ddlType，目前只有CREATE,DROP和TRUNCATE三种类型有设置。
+<img src="./imgs/831f0c05-af2d-4f4a-bcaf-cb0544c4c44f.png" alt="" /></p>
+
+<h4 id="create-table">CREATE TABLE</h4>
+
+<ol>
+<li>如果DDL执行成功，执行DDLNotifyTableMetaHandler将对应表的metadata更新到内存中<br /></li>
+
+<li><p>调用ProxyMetaManager#notifyResponseClusterDDL，zk场景是ProxyMetaManager#notifyResponseZKDdl<br />
+(1)先自己创建临时节点，路径是<code>/dble/{clusterId}/ddl/目标库.目标表/instance/{myid}</code><br />
+(2)(仅限于DDL节点))更新<code>/dble/{clusterId}/ddl/{目标库}.{目标表}</code>节点内容，主要是<code>DDLInfo#status</code>会从<code>INIT</code>变成<code>SUCCESS</code>或者<code>FAILED</code>
+(3)(仅限于DDL节点)然后间隔循环检查其他节点是否都在<code>/dble/{clusterId}/ddl/目标库.目标表/instance/</code>创建了各自的myid节点，所有在线节点全部成功创建子节点后，方法返回</p>
+
+<pre><code>List&lt;String&gt; preparedList = zkConn.getChildren().forPath(instancePath);
+List&lt;String&gt; onlineList = zkConn.getChildren().forPath(KVPathUtil.getOnlinePath());
+if (preparedList.size() &gt;= onlineList.size()) {
+</code></pre>
+
+<p>这里比较是大于等于，因为可能拿到preparedList后，有的节点就不幸宕机了。</p></li>
+
+<li><p>释放本地锁</p></li>
+</ol>
+
+<h4 id="drop-table">DROP TABLE</h4>
+
+<p>和CREATE TABLE操作步骤类似，不同的地方就是第一步维护meta信息的时候是删除操作而已。</p>
+
+<h4 id="truncate-table">TRUNCATE TABLE</h4>
+
+<p>和建表删表相比，没有维护自己metadata的操作，直接2,3两步</p>
+
+<h4 id="其他类型">其他类型</h4>
+
+<p>和建表步骤类似，这两个分开来其实是有重复代码了，差别就是建表的时候多了一个消除缺少表告警的操作。
+com.actiontech.dble.meta.ProxyMetaManager#createTable
+com.actiontech.dble.meta.ProxyMetaManager#genTableMetaByShow</p>
+
+<h3 id="其他节点-ddlchildlistener监听到-dble-clusterid-ddl-目标库-目标表-路径的内容更新">其他节点 DDLChildListener监听到<code>/dble/{clusterId}/ddl/{目标库}.{目标表}</code>路径的内容更新</h3>
+
+<p>com.actiontech.dble.meta.DDLChildListener#updateMeta</p>
+
+<ol>
+<li><p>远程节点DDL执行失败，直接释放本地锁 并且 调用<code>ProxyMetaManager#notifyResponseClusterDDL</code>在<code>/dble/{clusterId}/ddl/目标库.目标表/instance/</code>创建自己的myid 临时节点</p></li>
+
+<li><p>远程DDL节点执行成功的时候和 上面DDL节点的操作类似</p></li>
+</ol>
+
+<h3 id="ddl节点宕机-其他节点触发offlinestatuslistener">DDL节点宕机 其他节点触发OfflineStatusListener</h3>
+
+<p>监听<code>/dble/{clusterId}/online/{myid}</code>临时节点被删除<br />
+1. com.actiontech.dble.server.OfflineStatusListener#releaseForDDL
+检查KVPathUtil.getDDLPath()，例如<code>/dble/cluster-1/ddl</code>下的子节点，是否有监听器里通知的宕机节点未执行完成的DDL。<br />
+如果<code>DDLInfo#getStatus</code>是<code>DDLStatus.INIT</code>,那么当前节点释放本地锁。<br />
+如果<code>DDLInfo#getStatus</code>不是<code>DDLStatus.INIT</code>，那么其他节点在ddl path下的子节点更新的时候已经触发<code>DDLChildListener#updateMeta</code>,释放过本地锁了。<br />
+但是不管怎样，ddl path下的子节点还是存在，会组织其他节点对相同的表执行DDL，还会在ProxyMetaManager#metaZKinit阻止后续节点启动。<br />
+宕机节点里日志有个告警</p>
+
+<pre><code>2019-03-08 20:21:46,985 [WARN ][Curator-PathChildrenCache-0]  service instance[server_01] has crashed.Please manually check ddl status on every data node and delete ddl node [/dble/cluster-1/ddl/`testdb`.`testpppppp`]  from zookeeper after every instance received this message  (com.actiontech.dble.server.OfflineStatusListener:OfflineStatusListener.java:79)
+</code></pre>
+
+<p>所以在这种情况下，需要手动删除ddl path下的子节点。<br />
+个人感觉流程是这样的，宕机节点执行DDL后会报错。</p>
+
+<pre><code>mysql&gt; alter table testpppppp add name3 char;
+ERROR 2013 (HY000): Lost connection to MySQL server during query
+</code></pre>
+
+<p>重新执行，转发到其他节点后，会告诉你冲突的节点。</p>
+
+<pre><code>mysql&gt; alter table testpppppp add name3 char;
+ERROR 1064 (HY000): java.lang.Exception: The syncMeta.lock or metaLock about `testdb`.`testpppppp` in /dble/cluster-1/ddlis Exists,sql:alter table testpppppp add name3 char
+</code></pre>
+
+<p>这里感觉还是有点麻烦的，要去zk自己判断下数据。   在<code>/dble/{clusterId}/online/{myid}</code>不在线的节点，ddl path下的子节点都可以删除掉。<br />
+是不是可以弄个释放metalock锁的命令？<br />
+2. com.actiontech.dble.server.OfflineStatusListener#releaseForBinlog还不理解功能</p>
+
+<h3 id="后台metadata一致性检查线程">后台metadata一致性检查线程</h3>
+
+<p>com.actiontech.dble.meta.ProxyMetaManager#tableStructureCheck
+com.actiontech.dble.meta.table.TablesMetaCheckHandler
+会检查内存中的metadata是否和物理库不一致，并进行告警。
+具体见<a href="https://actiontech.github.io/dble-docs-cn/2.Function/2.10_table_meta/2.10.3_consistency_check.html" title="2.10.3 一致性检测">2.10.3 一致性检测</a></p>
+
+<h3 id="辅助命令1-reloadmetadata">辅助命令1  ReloadMetaData</h3>
+
+<p>Reload metadata of tables or specified table</p>
+
+<pre><code>reload @@metadata [where schema=? [and table=?] | where table in ('schema1'.'table1',...)]
+</code></pre>
+
+<blockquote>
+<p>如果执行DDL的结点故障下线，其他结点会侦听到此消息，保证解开对应结点的tablemeta锁，并记录故障告警（如果配置了告警通道），需要运维人工介入修改ZK对应ddl结点的状态，检查各个结点meta数据状态，可能需要reload metadata。</p>
+</blockquote>
+
+<h3 id="辅助命令2-checkfullmetadata">辅助命令2  CheckFullMetaData</h3>
+
+<p>用于检查meta信息是否存在以及加载的时间。<br />
+详见dble文档 <a href="https://actiontech.github.io/dble-docs-cn/2.Function/2.1_manager_cmd/2.1.17_check_meta_data.html" title="2.1.17 check @@metadata 命令">2.1.17 check @@metadata 命令</a></p>
+
+                        </div>
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/posts/maven-assembly-plugin-bug/">maven-assembly-plugin 打包包含多余依赖问题一则</a></li>
+        
+        <li><a href="/archives/">归档</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://tankilo.github.io/tags/dble">dble</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "tankilo/tankilo.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://tankilo.github.io">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://tankilo.github.io/posts/dble-metadata/" title="DBLE元数据代码原理解析">DBLE元数据代码原理解析</a>
+    </li>
+    
+    <li>
+        <a href="https://tankilo.github.io/posts/maven-assembly-plugin-bug/" title="maven-assembly-plugin 打包包含多余依赖问题一则">maven-assembly-plugin 打包包含多余依赖问题一则</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+</ul>
+    </section>
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://tankilo.github.io/tags/dble/">dble</a>
+    
+    <a href="https://tankilo.github.io/tags/maven/">maven</a>
+    
+</div>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">其它</h3>
+        <ul class="widget-list">
+            <li><a href="https://tankilo.github.io/index.xml">文章 RSS</a></li>
+        </ul>
+    </section>
+</div>
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2018 <a href="https://tankilo.github.io">Tankilo&#39;s Blog By Tankilo</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/rujews/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+
+
+
+</body>
+</html>
