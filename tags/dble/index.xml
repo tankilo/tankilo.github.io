@@ -20,7 +20,9 @@
       <description>DBLE 官方文档 2.10 meta数据管理 背景介绍 meta数据包括表信息和视图信息，本文只关心表信息。
 维护meta数据的意义 之前创建表的时候，只有在表名和schema.xml里配置的逻辑表冲突的时候，sql才能不执行提前返回错误。在schema默认datanode创建表这种情况时，只能走到后端mysql才发现错误。现在内存中有了完整的meta，表名重复都可以提前拦截。
 DBLE复杂sql查询的时候，需要metadata。
-DBLE的方案 每个dble节点内存中都维护metadata metadata是每个节点从后端mysql查询解析出来的 分库分表多个表的时候，会做分片一致性校验
+DBLE的方案 每个dble节点内存中都维护metadata
+metadata是每个节点从后端mysql查询解析出来的
+分库分表多个表的时候，会做分片一致性校验
 有两个层级的锁来使操作相同表的DDL串行执行
 1. 单节点时本地锁
 内存中本地锁，单进程内每个DDL sql串行去校验锁，锁本身是按照表的粒度组织的
@@ -29,8 +31,8 @@ DBLE的方案 每个dble节点内存中都维护metadata metadata是每个节点
 详细流程 以zk多节点为例，按照程序执行的顺序来介绍。
 上面的图来自于官方文档 2.8.4 状态同步 A.DDL
 初始化 代码入口 com.actiontech.dble.meta.ProxyMetaManager#metaZKinit
-1. 阻止其他节点再执行DDL 一直尝试去创建临时节点KVPathUtil.getSyncMetaLockPath()，直到成功,zk路径值例如/dble/cluster-1/lock/syncMeta.lock。这个节点如果添加成功，会组织其他dble节点开始执行DDL。
-2. 等待执行中的DDL完成 等待KVPathUtil.getDDLPath()，zk路径例如/dble/cluster-1/ddl下没有子节点，这步是等待所有正在执行中的DDL 执行完成。
+1. 阻止其他节点再执行DDL 一直尝试去创建临时节点KVPathUtil.getSyncMetaLockPath()，直到成功,zk路径值例如/dble/cluster-1/lock/syncMeta.lock。这个节点如果添加成功，会阻止其他dble节点开始执行DDL。
+2. 等待执行中的DDL完成 等待 KVPathUtil.getDDLPath()，zk路径例如/dble/cluster-1/ddl下 没有子节点，这步是等待所有正在执行中的DDL 执行完成。
 3. 从后端mysql查询表信息，包括配置的逻辑表和默认datanode的单表 接下来调用ProxyMetaManager#initMeta，单节点的时候是直接调用这个方法，不走上面的逻辑。
 ProxyMetaManager#initMeta com.actiontech.dble.meta.table.SchemaMetaHandler里有两套逻辑 默认是走新的重构过的逻辑。
 老的逻辑是每个表一个sql去查，如果表多了，因为异步执行，开始就把连接池耗尽了。
